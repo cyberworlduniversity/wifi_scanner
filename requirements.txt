@@ -1,0 +1,11 @@
+# WiFi Network Scanner - Requirements
+# Tool #13 | GitHub: hemanathan115
+# No external packages required - uses Python standard library only
+# Python >= 3.6
+
+# Built-in modules used (no install needed):
+# - subprocess
+# - platform
+# - sys
+# - os
+# - datetime
