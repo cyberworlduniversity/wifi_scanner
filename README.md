@@ -1,5 +1,15 @@
 # 📶 WiFi Network Scanner — Tool #13
 
+
+## Get this repository
+
+Clone the current project (this repository's canonical GitHub URL), then follow the installation and usage steps below.
+
+```bash
+git clone https://github.com/cyberworlduniversity/wifi_scanner.git
+cd wifi_scanner
+```
+
 > **GitHub:** [@hemanathan115](https://github.com/hemanathan115)  
 > **Category:** Network Tools | **Language:** Python 3
 
@@ -53,8 +63,8 @@ wifi_scanner/
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/hemanathan115/wifi-scanner.git
-cd wifi-scanner
+git clone https://github.com/cyberworlduniversity/wifi_scanner.git
+cd wifi_scanner
 ```
 
 ### 2. Run the Scanner
