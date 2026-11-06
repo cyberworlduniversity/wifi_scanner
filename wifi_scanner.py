@@ -11,6 +11,8 @@ import sys
 import os
 from datetime import datetime
 
+COMMAND_TIMEOUT_SECONDS = 20
+
 # ─────────────────────────────────────────────
 # ANSI Colors
 # ─────────────────────────────────────────────
@@ -81,6 +83,26 @@ def encryption_color(enc):
         return f"{CYAN}{enc}{RESET}"
 
 
+def split_nmcli_fields(line):
+    """Split nmcli terse output without splitting escaped colons."""
+    fields, current, escaped = [], [], False
+    for char in line:
+        if escaped:
+            current.append(char)
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == ":":
+            fields.append("".join(current))
+            current = []
+        else:
+            current.append(char)
+    if escaped:
+        current.append("\\")
+    fields.append("".join(current))
+    return fields
+
+
 # ─────────────────────────────────────────────
 # Linux Scanner (nmcli)
 # ─────────────────────────────────────────────
@@ -88,42 +110,49 @@ def scan_linux():
     networks = []
     try:
         result = subprocess.run(
-            ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,BSSID,FREQ", "dev", "wifi", "list"],
-            capture_output=True, text=True
+            ["nmcli", "--terse", "--escape", "yes", "--fields",
+             "SSID,SIGNAL,SECURITY,BSSID,FREQ", "device", "wifi", "list"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=COMMAND_TIMEOUT_SECONDS, check=True
         )
-        lines = result.stdout.strip().split("\n")
         seen = set()
-        for line in lines:
+        for line in result.stdout.splitlines():
             if not line.strip():
                 continue
-            parts = line.split(":")
-            if len(parts) >= 3:
-                ssid     = parts[0].strip() or "<Hidden>"
-                signal   = parts[1].strip()
-                security = parts[2].strip() or "OPEN"
-                bssid    = parts[3].strip() if len(parts) > 3 else "N/A"
-                freq     = parts[4].strip() if len(parts) > 4 else "N/A"
-                key = (ssid, bssid)
-                if key not in seen:
-                    seen.add(key)
-                    # Convert nmcli signal (0-100) to approximate dBm
-                    try:
-                        sig_pct = int(signal)
-                        dbm = (sig_pct / 2) - 100
-                    except ValueError:
-                        dbm = -100
-                    networks.append({
-                        "ssid":     ssid,
-                        "signal":   f"{dbm:.0f} dBm ({signal}%)",
-                        "dbm":      dbm,
-                        "security": security,
-                        "bssid":    bssid,
-                        "freq":     freq
-                    })
+            parts = split_nmcli_fields(line)
+            if len(parts) != 5:
+                continue
+            ssid, signal, security, bssid, freq = (part.strip() for part in parts)
+            ssid = ssid or "<Hidden>"
+            security = security or "OPEN"
+            bssid = bssid or "N/A"
+            freq = freq or "N/A"
+            key = (ssid, bssid)
+            if key in seen:
+                continue
+            seen.add(key)
+            try:
+                sig_pct = int(signal)
+                if not 0 <= sig_pct <= 100:
+                    raise ValueError
+                dbm = (sig_pct / 2) - 100
+            except (ValueError, TypeError):
+                dbm = -100
+            networks.append({
+                "ssid": ssid,
+                "signal": f"{dbm:.0f} dBm ({signal}%)",
+                "dbm": dbm,
+                "security": security,
+                "bssid": bssid,
+                "freq": freq
+            })
     except FileNotFoundError:
         print(f"{RED}[!] nmcli not found. Install: sudo apt install network-manager{RESET}")
+    except subprocess.TimeoutExpired:
+        print(f"{RED}[!] WiFi scan timed out after {COMMAND_TIMEOUT_SECONDS} seconds.{RESET}")
+    except subprocess.CalledProcessError as e:
+        print(f"{RED}[!] nmcli failed (exit {e.returncode}). Check NetworkManager and WiFi state.{RESET}")
     return networks
-
 
 # ─────────────────────────────────────────────
 # macOS Scanner (airport)
@@ -132,7 +161,9 @@ def scan_macos():
     networks = []
     airport = "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport"
     try:
-        result = subprocess.run([airport, "-s"], capture_output=True, text=True)
+        result = subprocess.run([airport, "-s"], capture_output=True, text=True,
+                               encoding="utf-8", errors="replace",
+                               timeout=COMMAND_TIMEOUT_SECONDS, check=True)
         lines = result.stdout.strip().split("\n")
         seen = set()
         for line in lines[1:]:
@@ -155,8 +186,10 @@ def scan_macos():
                         "bssid":    bssid,
                         "freq":     "N/A"
                     })
-    except Exception as e:
-        print(f"{RED}[!] Error: {e}{RESET}")
+    except subprocess.TimeoutExpired:
+        print(f"{RED}[!] macOS WiFi scan timed out after {COMMAND_TIMEOUT_SECONDS} seconds.{RESET}")
+    except (OSError, subprocess.CalledProcessError) as e:
+        print(f"{RED}[!] macOS WiFi scan failed: {e}{RESET}")
     return networks
 
 
@@ -168,7 +201,8 @@ def scan_windows():
     try:
         result = subprocess.run(
             ["netsh", "wlan", "show", "networks", "mode=bssid"],
-            capture_output=True, text=True, encoding="utf-8", errors="ignore"
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=COMMAND_TIMEOUT_SECONDS, check=True
         )
         blocks = result.stdout.split("SSID")
         for block in blocks[1:]:
@@ -199,8 +233,10 @@ def scan_windows():
                 "bssid":    bssid,
                 "freq":     "N/A"
             })
-    except Exception as e:
-        print(f"{RED}[!] Error: {e}{RESET}")
+    except subprocess.TimeoutExpired:
+        print(f"{RED}[!] Windows WiFi scan timed out after {COMMAND_TIMEOUT_SECONDS} seconds.{RESET}")
+    except (OSError, subprocess.CalledProcessError) as e:
+        print(f"{RED}[!] Windows WiFi scan failed: {e}{RESET}")
     return networks
 
 
@@ -238,7 +274,7 @@ def display_networks(networks):
 def save_report(networks):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename  = f"wifi_scan_{timestamp}.txt"
-    with open(filename, "w") as f:
+    with open(filename, "w", encoding="utf-8") as f:
         f.write(f"WiFi Scan Report - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"GitHub: hemanathan115 | Tool #13 - WiFi Network Scanner\n")
         f.write("=" * 70 + "\n\n")
