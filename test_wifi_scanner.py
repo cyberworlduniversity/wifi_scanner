@@ -14,7 +14,7 @@ class NmcliParsingTests(unittest.TestCase):
     def test_linux_scan_has_timeout_and_returns_bssid_as_one_field(self, run):
         run.return_value = subprocess.CompletedProcess(
             args=["nmcli"], returncode=0,
-            stdout=r"Office\: West:82:WPA2:AA\:BB\:CC\:DD\:EE\:FF:5180" + "\\n"
+            stdout=r"Office\: West:82:WPA2:AA\:BB\:CC\:DD\:EE\:FF:5180" + "\n"
         )
         networks = wifi_scanner.scan_linux()
         self.assertEqual(len(networks), 1)
