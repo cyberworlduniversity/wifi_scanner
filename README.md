@@ -157,3 +157,55 @@ MIT License — Free to use, modify, and distribute.
 GitHub: [@hemanathan115](https://github.com/hemanathan115)
 
 > ⭐ If you find this useful, please star the repository!
+
+
+## Repository Quick Start
+
+Clone the canonical repository:
+
+```bash
+git clone https://github.com/cyberworlduniversity/wifi_scanner.git
+cd wifi_scanner
+```
+
+### Requirements and installation
+
+- Python 3.10+ is recommended.
+Create an isolated environment and install dependencies:
+
+```bash
+python -m venv .venv
+# Linux/macOS: source .venv/bin/activate
+# Windows PowerShell: .venv\\Scripts\\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+### Run
+
+```bash
+python wifi_scanner.py
+```
+
+For scripts that expose command-line options, use `python wifi_scanner.py --help` to inspect the options implemented in this version. Begin with sample or non-sensitive input.
+
+### Validate source syntax
+
+```bash
+python -m compileall -q .
+```
+
+Wireless scanning may require platform-specific permissions and must be limited to networks you are authorized to inspect.
+
+### Program flow
+
+```mermaid
+flowchart TD
+    A[Start] --> B[Load input and settings]
+    B --> C{Input valid?}
+    C -- No --> D[Show validation error]
+    C -- Yes --> E[Run wifi scanner checks]
+    E --> F[Evaluate results]
+    F --> G[Display or save report]
+    G --> H[Exit]
+    D --> H
+```
